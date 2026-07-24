@@ -26,10 +26,10 @@ export default function Admin() {
     try {
       if (activeTab === 'bookings') {
         const res = await getAdminBookings();
-        if (res.data.success) setBookings(res.data.bookings || []);
+        if (res?.data?.success) setBookings(res.data.bookings || []);
       } else {
         const res = await getAdminTickets();
-        if (res.data.success) setTickets(res.data.tickets || []);
+        if (res?.data?.success) setTickets(res.data.tickets || []);
       }
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
@@ -43,9 +43,11 @@ export default function Admin() {
     setLoginError('');
     try {
       const res = await adminLogin({ username, password });
-      if (res.data.success) {
+      if (res?.data?.success) {
         localStorage.setItem('svr_admin_token', res.data.token || 'logged_in');
         setIsAuthenticated(true);
+      } else {
+        setLoginError(res?.data?.error || 'Invalid credentials.');
       }
     } catch (err) {
       setLoginError(err.response?.data?.error || 'Invalid credentials.');
@@ -62,7 +64,7 @@ export default function Admin() {
     setActionLoading(refId);
     try {
       const res = await confirmBooking(refId);
-      if (res.data.success) fetchDashboardData();
+      if (res?.data?.success) fetchDashboardData();
     } catch (err) {
       alert('Failed to confirm booking.');
     } finally {
@@ -75,7 +77,7 @@ export default function Admin() {
     setActionLoading(refId);
     try {
       const res = await cancelBooking(refId);
-      if (res.data.success) fetchDashboardData();
+      if (res?.data?.success) fetchDashboardData();
     } catch (err) {
       alert('Failed to cancel booking.');
     } finally {
@@ -89,7 +91,7 @@ export default function Admin() {
     setActionLoading(ticketId);
     try {
       const res = await replyTicket(ticketId, text);
-      if (res.data.success) {
+      if (res?.data?.success) {
         setReplyText((prev) => ({ ...prev, [ticketId]: '' }));
         fetchDashboardData();
       }
@@ -205,17 +207,17 @@ export default function Admin() {
                   </tr>
                 ) : (
                   bookings.map((b) => (
-                    <tr key={b.ref_id} className="hover:bg-slate-950/50">
-                      <td className="p-3 font-mono text-cyan-400 font-bold">{b.ref_id}</td>
+                    <tr key={b.ref_id || b.id} className="hover:bg-slate-950/50">
+                      <td className="p-3 font-mono text-cyan-400 font-bold">{b.ref_id || 'N/A'}</td>
                       <td className="p-3">
-                        <p className="font-semibold text-white">{b.customer_name}</p>
+                        <p className="font-semibold text-white">{b.customer_name || 'Guest'}</p>
                         <p className="text-[10px] text-slate-400">{b.phone}</p>
                       </td>
                       <td className="p-3">
                         <p className="text-white">{b.zone_name || b.zone_id}</p>
                         <p className="text-[10px] text-slate-400">{b.session_date} | {b.time_slot}</p>
                       </td>
-                      <td className="p-3 font-bold text-white">₦{b.total_cost?.toLocaleString()}</td>
+                      <td className="p-3 font-bold text-white">₦{b.total_cost?.toLocaleString() || 0}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                           b.status === 'confirmed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30' :
@@ -223,7 +225,7 @@ export default function Admin() {
                           b.status === 'cancelled' ? 'bg-red-950 text-red-400 border border-red-500/30' :
                           'bg-cyan-950 text-cyan-400 border border-cyan-500/30'
                         }`}>
-                          {b.status.replace('_', ' ')}
+                          {b.status ? b.status.replace('_', ' ') : 'pending'}
                         </span>
                       </td>
                       <td className="p-3 text-right space-x-2">
@@ -266,15 +268,15 @@ export default function Admin() {
               <p className="p-6 text-center text-slate-500 text-xs">No active support tickets.</p>
             ) : (
               tickets.map((t) => (
-                <div key={t.ticket_id} className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                <div key={t.ticket_id || t.id} className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
                   <div className="flex justify-between items-start text-xs">
                     <div>
-                      <span className="font-mono text-cyan-400 font-bold">#{t.ticket_id}</span>
+                      <span className="font-mono text-cyan-400 font-bold">#{t.ticket_id || 'N/A'}</span>
                       <p className="font-semibold text-white mt-1">{t.subject}</p>
                       <p className="text-[10px] text-slate-400">{t.customer_email} • {t.created_at}</p>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${t.status === 'open' ? 'bg-amber-950 text-amber-400' : 'bg-slate-800 text-slate-400'}`}>
-                      {t.status}
+                      {t.status || 'open'}
                     </span>
                   </div>
 

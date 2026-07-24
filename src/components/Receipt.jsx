@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { markBookingPaid } from '../api';
 
-export default function Receipt({ booking, onReset }) {
-  const [status, setStatus] = useState(booking.status);
+export default function Receipt({ booking = {}, onReset }) {
+  const [status, setStatus] = useState(booking?.status || 'pending_payment');
   const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -12,17 +12,32 @@ export default function Receipt({ booking, onReset }) {
     account_number: "8167059132",
   };
 
-  const handleCopyAccount = () => {
-    navigator.clipboard.writeText(bank.account_number);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyAccount = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(bank.account_number);
+      } else {
+        // Fallback for non-HTTPS or legacy environments
+        const textArea = document.createElement('textarea');
+        textArea.value = bank.account_number;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy account number:", err);
+    }
   };
 
   const handleConfirmPaid = async () => {
+    if (!booking?.ref_id) return;
     setUpdating(true);
     try {
       const res = await markBookingPaid(booking.ref_id);
-      if (res.data.success) {
+      if (res?.data?.success && res?.data?.booking?.status) {
         setStatus(res.data.booking.status);
       }
     } catch (err) {
@@ -31,6 +46,8 @@ export default function Receipt({ booking, onReset }) {
       setUpdating(false);
     }
   };
+
+  const formattedStatus = (status || 'pending_payment').replace(/_/g, ' ');
 
   return (
     <div className="max-w-xl mx-auto p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl space-y-6">
@@ -41,10 +58,10 @@ export default function Receipt({ booking, onReset }) {
           status === 'awaiting_verification' ? 'bg-amber-950 text-amber-400 border border-amber-500/30' :
           'bg-cyan-950 text-cyan-400 border border-cyan-500/30'
         }`}>
-          {status.replace('_', ' ')}
+          {formattedStatus}
         </span>
         <h2 className="text-3xl font-extrabold text-white">Booking Receipt</h2>
-        <p className="text-sm font-mono text-cyan-400 font-semibold">{booking.ref_id}</p>
+        <p className="text-sm font-mono text-cyan-400 font-semibold">{booking?.ref_id || 'N/A'}</p>
       </div>
 
       {/* Payment Bank Details */}
@@ -73,7 +90,7 @@ export default function Receipt({ booking, onReset }) {
             </div>
           </div>
           <div className="pt-2 border-t border-slate-800 text-xs text-slate-400">
-            <span className="text-amber-400 font-medium">Note:</span> Use <span className="font-mono text-white">{booking.ref_id}</span> as the transfer narration/description.
+            <span className="text-amber-400 font-medium">Note:</span> Use <span className="font-mono text-white">{booking?.ref_id || 'Ref ID'}</span> as the transfer narration/description.
           </div>
         </div>
       </div>
@@ -82,28 +99,28 @@ export default function Receipt({ booking, onReset }) {
       <div className="space-y-2 text-sm border-t border-b border-slate-800 py-4">
         <div className="flex justify-between text-slate-300">
           <span className="text-slate-500">Customer:</span>
-          <span>{booking.customer_name}</span>
+          <span>{booking?.customer_name || 'Guest'}</span>
         </div>
         <div className="flex justify-between text-slate-300">
           <span className="text-slate-500">Zone:</span>
-          <span>{booking.zone_name}</span>
+          <span>{booking?.zone_name || booking?.zone_id || 'Station'}</span>
         </div>
         <div className="flex justify-between text-slate-300">
           <span className="text-slate-500">Schedule:</span>
-          <span>{booking.session_date} ({booking.time_slot})</span>
+          <span>{booking?.session_date || 'Date N/A'} ({booking?.time_slot || 'Time N/A'})</span>
         </div>
         <div className="flex justify-between text-slate-300">
           <span className="text-slate-500">Games:</span>
-          <span>{booking.duration_min}</span>
+          <span>{booking?.duration_min || 1}</span>
         </div>
 
-        {booking.drinks && booking.drinks.length > 0 && (
+        {booking?.drinks && booking.drinks.length > 0 && (
           <div className="pt-2">
             <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold block mb-1">Drinks Bar:</span>
             {booking.drinks.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-xs text-slate-400">
-                <span>{item.qty}x {item.name}</span>
-                <span>₦{item.line_total.toLocaleString()}</span>
+              <div key={item.item_id || idx} className="flex justify-between text-xs text-slate-400">
+                <span>{item.qty}x {item.name || 'Drink Item'}</span>
+                <span>₦{item.line_total ? item.line_total.toLocaleString() : 0}</span>
               </div>
             ))}
           </div>
@@ -111,7 +128,7 @@ export default function Receipt({ booking, onReset }) {
 
         <div className="flex justify-between text-base font-bold text-white pt-3 border-t border-slate-800">
           <span>Total Amount:</span>
-          <span className="text-cyan-400">₦{booking.total_cost.toLocaleString()}</span>
+          <span className="text-cyan-400">₦{booking?.total_cost ? booking.total_cost.toLocaleString() : 0}</span>
         </div>
       </div>
 

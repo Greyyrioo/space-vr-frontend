@@ -20,9 +20,10 @@ export default function BookingForm({ onBookingSuccess }) {
   useEffect(() => {
     getAppConfig()
       .then((res) => {
-        if (res.data.success) {
+        if (res?.data?.success) {
           setConfig(res.data);
-          const firstZone = Object.keys(res.data.zones)[0];
+          const zones = res.data.zones || {};
+          const firstZone = Object.keys(zones)[0];
           if (firstZone) setZoneId(firstZone);
         }
       })
@@ -37,8 +38,11 @@ export default function BookingForm({ onBookingSuccess }) {
   const selectedZone = config?.zones?.[zoneId];
   const zoneCost = selectedZone ? selectedZone.price_per_game * Number(durationMin) : 0;
 
+  // Updated menu fallback to handle drinks_bar_menu or fuel_bar_menu seamlessly
+  const menuItems = config?.drinks_bar_menu || config?.fuel_bar_menu || {};
+
   const drinksCost = Object.entries(selectedDrinks).reduce((sum, [itemId, qty]) => {
-    const item = config?.fuel_bar_menu?.[itemId];
+    const item = menuItems[itemId];
     return sum + (item ? item.price * qty : 0);
   }, 0);
 
@@ -47,7 +51,7 @@ export default function BookingForm({ onBookingSuccess }) {
   const handleDrinkChange = (itemId, qty) => {
     setSelectedDrinks((prev) => ({
       ...prev,
-      [itemId]: Math.max(0, parseInt(qty) || 0),
+      [itemId]: Math.max(0, parseInt(qty, 10) || 0),
     }));
   };
 
@@ -73,10 +77,10 @@ export default function BookingForm({ onBookingSuccess }) {
 
     try {
       const res = await createBooking(payload);
-      if (res.data.success) {
+      if (res?.data?.success) {
         if (onBookingSuccess) onBookingSuccess(res.data.booking);
       } else {
-        setErrors(res.data.errors || ['Failed to complete booking.']);
+        setErrors(res?.data?.errors || ['Failed to complete booking.']);
       }
     } catch (err) {
       setErrors([err.response?.data?.error || 'Server error occurred during booking.']);
@@ -105,9 +109,9 @@ export default function BookingForm({ onBookingSuccess }) {
             className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
             required
           >
-            {config && Object.entries(config.zones).map(([id, z]) => (
+            {config?.zones && Object.entries(config.zones).map(([id, z]) => (
               <option key={id} value={id}>
-                {z.name} -- ₦{z.price_per_game.toLocaleString()}/game
+                {z.name} -- ₦{z.price_per_game?.toLocaleString()}/game
               </option>
             ))}
           </select>
@@ -122,7 +126,7 @@ export default function BookingForm({ onBookingSuccess }) {
               onChange={(e) => setDurationMin(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
             >
-              {config?.durations.map((num) => (
+              {(config?.durations || [1, 2, 3, 4, 5]).map((num) => (
                 <option key={num} value={num}>{num} {num === 1 ? 'Game' : 'Games'}</option>
               ))}
             </select>
@@ -198,13 +202,13 @@ export default function BookingForm({ onBookingSuccess }) {
 
         {/* Drinks Bar Addition */}
         <div className="pt-4 border-t border-slate-800">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-3">Drinks & Snacks Bar (Optional)</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-3">Drinks Bar (Optional)</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
-            {config && Object.entries(config.fuel_bar_menu).map(([id, item]) => (
+            {Object.entries(menuItems).map(([id, item]) => (
               <div key={id} className="flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800">
                 <div className="text-sm">
                   <p className="font-medium text-slate-200">{item.name}</p>
-                  <p className="text-xs text-slate-400">₦{item.price.toLocaleString()}</p>
+                  <p className="text-xs text-slate-400">₦{item.price?.toLocaleString()}</p>
                 </div>
                 <input
                   type="number"
