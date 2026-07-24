@@ -1,0 +1,249 @@
+import React, { useState, useEffect } from 'react';
+import { getAppConfig, createBooking } from '../api';
+
+export default function BookingForm({ onBookingSuccess }) {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState([]);
+
+  // Form State
+  const [zoneId, setZoneId] = useState('');
+  const [durationMin, setDurationMin] = useState(1);
+  const [sessionDate, setSessionDate] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [selectedDrinks, setSelectedDrinks] = useState({});
+
+  useEffect(() => {
+    getAppConfig()
+      .then((res) => {
+        if (res.data.success) {
+          setConfig(res.data);
+          const firstZone = Object.keys(res.data.zones)[0];
+          if (firstZone) setZoneId(firstZone);
+        }
+      })
+      .catch(() => setErrors(['Failed to load business configuration. Check API connection.']))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Loading Space VR Booking Engine...</div>;
+  }
+
+  const selectedZone = config?.zones?.[zoneId];
+  const zoneCost = selectedZone ? selectedZone.price_per_game * Number(durationMin) : 0;
+
+  const drinksCost = Object.entries(selectedDrinks).reduce((sum, [itemId, qty]) => {
+    const item = config?.fuel_bar_menu?.[itemId];
+    return sum + (item ? item.price * qty : 0);
+  }, 0);
+
+  const totalCost = zoneCost + drinksCost;
+
+  const handleDrinkChange = (itemId, qty) => {
+    setSelectedDrinks((prev) => ({
+      ...prev,
+      [itemId]: Math.max(0, parseInt(qty) || 0),
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setErrors([]);
+
+    const drinksPayload = Object.entries(selectedDrinks)
+      .filter(([_, qty]) => qty > 0)
+      .map(([itemId, qty]) => ({ item_id: itemId, qty }));
+
+    const payload = {
+      customer_name: customerName,
+      phone,
+      email,
+      zone_id: zoneId,
+      duration_min: Number(durationMin),
+      session_date: sessionDate,
+      time_slot: timeSlot,
+      drinks: drinksPayload,
+    };
+
+    try {
+      const res = await createBooking(payload);
+      if (res.data.success) {
+        if (onBookingSuccess) onBookingSuccess(res.data.booking);
+      } else {
+        setErrors(res.data.errors || ['Failed to complete booking.']);
+      }
+    } catch (err) {
+      setErrors([err.response?.data?.error || 'Server error occurred during booking.']);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+      <h2 className="text-2xl font-bold text-white mb-6">Reserve Your VR Station</h2>
+
+      {errors.length > 0 && (
+        <div className="mb-6 p-4 bg-red-950/80 border border-red-500/50 rounded-xl text-red-200 text-sm">
+          {errors.map((err, i) => <p key={i}>• {err}</p>)}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Zone Selection */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Select Gaming Zone</label>
+          <select
+            value={zoneId}
+            onChange={(e) => setZoneId(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+            required
+          >
+            {config && Object.entries(config.zones).map(([id, z]) => (
+              <option key={id} value={id}>
+                {z.name} -- ₦{z.price_per_game.toLocaleString()}/game
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Duration / Games & Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Games / Duration</label>
+            <select
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+            >
+              {config?.durations.map((num) => (
+                <option key={num} value={num}>{num} {num === 1 ? 'Game' : 'Games'}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Session Date</label>
+            <input
+              type="date"
+              value={sessionDate}
+              onChange={(e) => setSessionDate(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Time Slot */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Time Slot</label>
+          <select
+            value={timeSlot}
+            onChange={(e) => setTimeSlot(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+            required
+          >
+            <option value="">Choose a time slot...</option>
+            <option value="10:00 AM – 12:00 PM">10:00 AM – 12:00 PM</option>
+            <option value="12:00 PM – 02:00 PM">12:00 PM – 02:00 PM</option>
+            <option value="02:00 PM – 04:00 PM">02:00 PM – 04:00 PM</option>
+            <option value="04:00 PM – 06:00 PM">04:00 PM – 06:00 PM</option>
+            <option value="06:00 PM – 08:00 PM">06:00 PM – 08:00 PM</option>
+            <option value="08:00 PM – 10:00 PM">08:00 PM – 10:00 PM</option>
+          </select>
+        </div>
+
+        {/* Contact Info */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Full Name</label>
+            <input
+              type="text"
+              placeholder="Gabriel Osaghae"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Phone</label>
+            <input
+              type="tel"
+              placeholder="08167059132"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Drinks Bar Addition */}
+        <div className="pt-4 border-t border-slate-800">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-3">Drinks & Snacks Bar (Optional)</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
+            {config && Object.entries(config.fuel_bar_menu).map(([id, item]) => (
+              <div key={id} className="flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                <div className="text-sm">
+                  <p className="font-medium text-slate-200">{item.name}</p>
+                  <p className="text-xs text-slate-400">₦{item.price.toLocaleString()}</p>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={selectedDrinks[id] || ''}
+                  onChange={(e) => handleDrinkChange(id, e.target.value)}
+                  placeholder="0"
+                  className="w-14 bg-slate-900 border border-slate-700 rounded-lg p-1 text-center text-sm text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Live Summary Bar */}
+        <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-sm">
+          <div className="flex justify-between text-slate-400">
+            <span>Zone Station Cost:</span>
+            <span>₦{zoneCost.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-slate-400">
+            <span>Drinks Bar:</span>
+            <span>₦{drinksCost.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-lg font-bold text-cyan-400 pt-2 border-t border-slate-800">
+            <span>Total:</span>
+            <span>₦{totalCost.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full py-3.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition duration-200 disabled:opacity-50"
+        >
+          {submitting ? 'Processing Booking...' : 'Proceed to Payment Receipt'}
+        </button>
+      </form>
+    </div>
+  );
+}
